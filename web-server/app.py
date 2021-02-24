@@ -5,12 +5,19 @@ Raspberry Pi JukeBox created by Mark Cantrill @Astro-Designs
 '''
 
 import os
+import subprocess
 import RPi.GPIO as GPIO
 import JukeBox_conf
+from random import seed
+from random import randint
 from flask import Flask, render_template, request
 app = Flask(__name__)
 
+# Setup GPIO
 GPIO.setmode(GPIO.BCM)
+
+# Seed the random number generator
+seed(1)
 
 # Create an empty playlist
 # Start with a minimum size of 10...
@@ -23,6 +30,9 @@ while len(playlist) < JukeBox_conf.playlist_Length:
 # Reset playlist read / write pointers
 playlist_write_pointer = 0
 playlist_read_pointer = 0
+
+# Variable to track if anything is currently playing
+playing = False
 
 # Search for Wallbox config file...
 print("Searching for configuration file...")
@@ -71,7 +81,6 @@ for index in range(num_indexes):
 
     # Check if file exists...
     PATH = JukeBox_conf.media_folder + index_filename
-    print(PATH)
     if os.path.isfile(PATH) and os.access(PATH, os.R_OK):
         tracks[index+1]['filename'] = index_filename
         tracks[index+1]['title'] = 'Unknown'
@@ -83,10 +92,6 @@ for index in range(num_indexes):
         tracks[index+1]['artist'] = 'Unknown'
         tracks[index+1]['state'] = 'NA'
 
-print(len(tracks))
-print(tracks[3])
-print(tracks)
-    
 # Set each pin as an output and make it low:
 for pin in pins:
    GPIO.setup(pin, GPIO.OUT)
@@ -141,25 +146,32 @@ def action(changePin, action):
       }
 
    return render_template('main.html', **templateData)
-
-# The function below is executed when someone requests a URL with a track reference to add to the play list or play immediately
-@app.route("/sel<changeTrack>/<action>")
-def selection(changeTrack, action):
-   global playlist, playlist_write_pointer, playlist_read_pointer
    
-   # Append zeros to changeTrack
-   Track = '000' + str(changeTrack)
-   Track = Track[-3:]
-   if action == "play":
-      message = "Playing " + Track
-      command = 'python mp3_player.py ' + 'sel' + Track + '.mp3 ' + '&'
-      os.system(command)
-   if action == "add":
-      message = "Adding " + Track + " to Playlist."
-      playlist[playlist_write_pointer] = int(changeTrack)
-      print("Playlist[", playlist_write_pointer, "]: ", int(changeTrack))
-      playlist_write_pointer = playlist_write_pointer + 1
-      print("Next pos: ", playlist_write_pointer)
+# The function below is executed when the track being played ends
+@app.route("/finished")
+def finished():
+   global playlist, playlist_write_pointer, playlist_read_pointer, playing
+   
+   # increment read pointer
+   playlist_read_pointer = playlist_read_pointer + 1
+
+   if playlist_read_pointer < playlist_write_pointer: # playlist has at least one entry ready to play
+
+      # Identify filename of playlist item
+      Track = '000' + str(playlist[playlist_read_pointer])
+      Track = Track[-3:]
+      
+      # Play the next track...
+      message = "Playing " + 'sel' + Track + '.mp3'
+      print(message)
+      playing = True
+
+      mp3_file = 'sel' + Track + '.mp3'
+      subprocess.Popen(['python', 'mp3_player.py', mp3_file])
+   else: # playlist is empty
+      playing = False
+      message = "End of Playlist."
+      print(message)
 
    # Along with the pin dictionary, put the message into the template data dictionary:
    templateData = {
@@ -172,5 +184,80 @@ def selection(changeTrack, action):
 
    return render_template('main.html', **templateData)
 
+# The function below is executed when someone requests a URL with a track reference to add to the play list or play immediately
+@app.route("/sel<changeTrack>/<action>")
+def selection(changeTrack, action):
+   global playlist, playlist_write_pointer, playlist_read_pointer, playing
+   
+   # Append zeros to changeTrack
+   Track = '000' + str(changeTrack)
+   Track = Track[-3:]
+   if action == "play":
+      message = "Playing " + Track
+      playing = True
+      command = 'python mp3_player.py ' + 'sel' + Track + '.mp3 ' + '&'
+      os.system(command)
+   if action == "add":
+      message = "Adding " + Track + " to Playlist."
+      playlist[playlist_write_pointer] = int(changeTrack)
+      playlist_write_pointer = playlist_write_pointer + 1
+      
+      # Start processing the playlist if nothing is playing
+      if playing == False:
+         if playlist_read_pointer < playlist_write_pointer: # playlist has at least one entry ready to play
+
+            # Identify filename of playlist item
+            Track = '000' + str(playlist[playlist_read_pointer])
+            Track = Track[-3:]
+
+            # Play the next track...
+            message = "Playing " + 'sel' + Track + '.mp3'
+            print(message)
+            playing = True
+
+            mp3_file = 'sel' + Track + '.mp3'
+            subprocess.Popen(['python', 'mp3_player.py', mp3_file])
+            #mp3_file = '/media/JukeBox/' + mp3_file
+            #subprocess.Popen(['omxplayer', '-o', 'alsa', mp3_file])
+         else: # playlist is empty
+            playing = False
+            message = "End of Playlist."
+            print(message)
+      
+   # Along with the pin dictionary, put the message into the template data dictionary:
+   templateData = {
+      'playlist' : playlist,
+      'playing_now' : playlist_read_pointer,
+      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'tracks' : tracks,
+      'pins' : pins
+      }
+
+   print("Update page...")
+   return render_template('main.html', **templateData)
+
+# The function below is executed when someone requests a URL with a track reference to add to the play list or play immediately
+@app.route("/random/<action>")
+def random(action):
+   # Find a random selection that's available
+   changeTrack = randint(1,200)
+   print("Random selction: ", changeTrack)
+   while tracks[changeTrack]['state'] != 'ready':
+      changeTrack = randint(1,200)
+      print("Random selction: ", changeTrack)
+
+   # Pass the random selection together with the action to the selection function
+   selection(changeTrack, action)
+   
+   templateData = {
+      'playlist' : playlist,
+      'playing_now' : playlist_read_pointer,
+      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'tracks' : tracks,
+      'pins' : pins
+      }
+
+   return render_template('main.html', **templateData)
+   
 if __name__ == "__main__":
    app.run(host='0.0.0.0', port=80, debug=True)

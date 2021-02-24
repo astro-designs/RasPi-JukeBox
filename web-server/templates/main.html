@@ -7,27 +7,38 @@
    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap-theme.min.css" integrity="sha384-fLW2N01lMqjakBkx3l/M9EahuwpSfeNvV63J5ezn3uZzapT0u7EYsXMjQV+0En5r" crossorigin="anonymous">
    <!-- Latest compiled and minified JavaScript -->
    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js" integrity="sha384-0mSbJDEHialfmuBBQP6A4Qrprq5OVfW37PRR3j5ELqxss1yVqOtnepnHVP9aJ7xS" crossorigin="anonymous"></script>
-</head>
 
+   <style>
+   body {
+     background-image: url('file:///home/pi/web-server/templates/background.jpg');
+     background-repeat: no-repeat;
+     background-attachment: fixed;  
+     background-size: cover;
+   }
+   </style>
+</head>
 <body>
-   <h1 style="text-align:center;">RasPi-JukeBox</h1>
-   <h2>
-   Playing Now: {{playlist[playing_now]}}<br>
-   Queued: {{playing_queued}}<br>
-   Playing Next: {{playlist[playing_now + 1]}}<br>
-   </h2>
-   </h3>
+   <h1 style="text-align:center;"><strong>RasPi-JukeBox</strong></h1>
+   <h3 style="text-align:center;">
+   Playing Now: {{playlist[playing_now]}}</h3>
+   <h3 style="text-align:center;">
+   Queued: {{playing_queued}}</h3>
+   <h3 style="text-align:center;">
+   Playing Next: {{playlist[playing_now + 1]}}</h3><br>
+   <h3>
+   Random Selection : <button onclick="document.location='/random/add'">Add to Playlist</button>
+      <button onclick="document.location='/random/play'">Play Next!</button><br>
+   <br>
    {% for track in tracks %}
-   {% if tracks[track].filename == "NA" %}
-      Track {{track}} :<strong>unavailable</strong><div class="row"><div class="col-md-2">
-      <a class="btn btn-block btn-lg btn-primary" role="button">N/A</a></div></div>
+   {% if tracks[track].state == "NA" %}
+      Track {{track}} :<strong>unavailable</strong><br>
    {% else %}
-      Track {{track}} :<strong>available</strong><div class="row"><div class="col-md-2">
-      <a href="/sel{{track}}/play" class="btn btn-block btn-lg btn-primary" role="button">Play Next!</a></div></div>
-      <a href="/sel{{track}}/add" class="btn btn-block btn-lg btn-primary" role="button">Add to Playlist</a></div></div>
+      Track {{track}} :<strong>available</strong>
+      <button onclick="document.location='/sel{{track}}/add'">Add to Playlist</button>
+      <button onclick="document.location='/sel{{track}}/play'">Play Next!</button><br>
    {% endif %}
    {% endfor %}
-   
+   </h3>
    {% for pin in pins %}
    <h2>{{ pins[pin].name }}
    {% if pins[pin].state == true %}
