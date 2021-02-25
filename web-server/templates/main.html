@@ -10,7 +10,7 @@
 
    <style>
    body {
-     background-image: url('file:///home/pi/web-server/templates/background.jpg');
+     background-image: url({{ url_for('static', filename="background.jpg")}});
      background-repeat: no-repeat;
      background-attachment: fixed;  
      background-size: cover;
@@ -18,14 +18,10 @@
    </style>
 </head>
 <body>
-   <h1 style="text-align:center;"><strong>RasPi-JukeBox</strong></h1>
-   <h3 style="text-align:center;">
-   Playing Now: {{playlist[playing_now]}}</h3>
-   <h3 style="text-align:center;">
-   Queued: {{playing_queued}}</h3>
-   <h3 style="text-align:center;">
-   Playing Next: {{playlist[playing_now + 1]}}</h3><br>
-   <h3>
+   <h1 style="text-align:center;"> <span style="background-color:white;"><strong>RasPi-JukeBox</strong></span></h1>
+   <h3 style="text-align:center;"> <span style="background-color:white;">Playing Now: {{playlist[playing_now]}}</span></h3>
+   <h3 style="text-align:center;"> <span style="background-color:white;">Queued: {{playing_queued}}</span></h3>
+   <h3 style="text-align:center;"> <span style="background-color:white;">Playing Next: {{playlist[playing_now + 1]}}</span></h3>
    Random Selection : <button onclick="document.location='/random/add'">Add to Playlist</button>
       <button onclick="document.location='/random/play'">Play Next!</button><br>
    <br>
