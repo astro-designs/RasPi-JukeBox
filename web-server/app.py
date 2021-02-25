@@ -5,6 +5,7 @@ Raspberry Pi JukeBox created by Mark Cantrill @Astro-Designs
 '''
 
 import os
+import sys
 import subprocess
 import RPi.GPIO as GPIO
 import JukeBox_conf
@@ -17,7 +18,7 @@ app = Flask(__name__)
 GPIO.setmode(GPIO.BCM)
 
 # Seed the random number generator
-seed(1)
+seed()
 
 # Create an empty playlist
 # Start with a minimum size of 10...
@@ -195,8 +196,8 @@ def selection(changeTrack, action):
    if action == "play":
       message = "Playing " + Track
       playing = True
-      command = 'python mp3_player.py ' + 'sel' + Track + '.mp3 ' + '&'
-      os.system(command)
+      mp3_file = 'sel' + Track + '.mp3'
+      subprocess.Popen(['python', 'mp3_player.py', mp3_file])
    if action == "add":
       message = "Adding " + Track + " to Playlist."
       playlist[playlist_write_pointer] = int(changeTrack)
@@ -214,11 +215,8 @@ def selection(changeTrack, action):
             message = "Playing " + 'sel' + Track + '.mp3'
             print(message)
             playing = True
-
             mp3_file = 'sel' + Track + '.mp3'
             subprocess.Popen(['python', 'mp3_player.py', mp3_file])
-            #mp3_file = '/media/JukeBox/' + mp3_file
-            #subprocess.Popen(['omxplayer', '-o', 'alsa', mp3_file])
          else: # playlist is empty
             playing = False
             message = "End of Playlist."
@@ -233,7 +231,6 @@ def selection(changeTrack, action):
       'pins' : pins
       }
 
-   print("Update page...")
    return render_template('main.html', **templateData)
 
 # The function below is executed when someone requests a URL with a track reference to add to the play list or play immediately
@@ -241,10 +238,10 @@ def selection(changeTrack, action):
 def random(action):
    # Find a random selection that's available
    changeTrack = randint(1,200)
-   print("Random selction: ", changeTrack)
+   print("Random selection: ", changeTrack)
    while tracks[changeTrack]['state'] != 'ready':
       changeTrack = randint(1,200)
-      print("Random selction: ", changeTrack)
+      print("Random selection: ", changeTrack)
 
    # Pass the random selection together with the action to the selection function
    selection(changeTrack, action)
@@ -259,5 +256,32 @@ def random(action):
 
    return render_template('main.html', **templateData)
    
+# The function below is executed when someone requests a URL a system call:
+@app.route("/system/<action>")
+def system(action):
+   # If the action part of the URL is "on," execute the code indented below:
+   if action == "shutdown":
+      # Shutdown the player...
+      print("Shutting down...")
+      os.system("sudo shutdown") 
+   elif action == "exit":
+      # Exit the player to the command prompt...
+      print("Closing player...")
+      sys.exit()
+   elif action == "reboot":
+      # Exit the player to the command prompt...
+      print("Rebooting player...")
+      os.system("sudo reboot") 
+
+   templateData = {
+      'playlist' : playlist,
+      'playing_now' : playlist_read_pointer,
+      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'tracks' : tracks,
+	  'pins' : pins
+      }
+
+   return render_template('main.html', **templateData)
+
 if __name__ == "__main__":
    app.run(host='0.0.0.0', port=80, debug=True)
