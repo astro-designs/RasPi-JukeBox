@@ -7,6 +7,7 @@ Raspberry Pi JukeBox created by Mark Cantrill @Astro-Designs
 import os
 import sys
 import subprocess
+import logging
 import RPi.GPIO as GPIO
 import JukeBox_conf
 from random import seed
