@@ -3,6 +3,7 @@
 Raspberry Pi JukeBox created by Mark Cantrill @Astro-Designs
 
 '''
+version = "1.0.18"
 
 import os
 import sys
@@ -107,6 +108,7 @@ def main():
       pins[pin]['state'] = GPIO.input(pin)
    # Put the pin dictionary into the template data dictionary:
    templateData = {
+      'version' : version,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -140,6 +142,7 @@ def action(changePin, action):
 
    # Along with the pin dictionary, put the message into the template data dictionary:
    templateData = {
+      'version' : version,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -177,6 +180,7 @@ def finished():
 
    # Along with the pin dictionary, put the message into the template data dictionary:
    templateData = {
+      'version' : version,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -225,6 +229,7 @@ def selection(changeTrack, action):
       
    # Along with the pin dictionary, put the message into the template data dictionary:
    templateData = {
+      'version' : version,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -248,6 +253,7 @@ def random(action):
    selection(changeTrack, action)
    
    templateData = {
+      'version' : version,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -273,8 +279,12 @@ def system(action):
       # Exit the player to the command prompt...
       print("Rebooting player...")
       os.system("sudo reboot") 
+   elif action == "ping":
+      # Ping the player to check it's alive...
+      print("Received a ping!")
 
    templateData = {
+      'version' : version,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
