@@ -1,20 +1,39 @@
 '''
 
-Raspberry Pi JukeBox created by Mark Cantrill @Astro-Designs
+RasPi-JukeBox - the Raspberry Pi JukeBox created by Mark Cantrill @Astro-Designs
+
+To do...
+    Add logging function
+    Make it run under Python 3
+    Prevent the playlist from falling over after 50 selections
+    Flask - Turn off debugging
+    Flask - Use a production thingy...
+    Cleanup
+    Test
 
 '''
-version = "1.0.18"
+version = "1.0.31"
 
 import os
 import sys
 import subprocess
 import logging
+import time
 import RPi.GPIO as GPIO
 import JukeBox_conf
 from random import seed
 from random import randint
 from flask import Flask, render_template, request
 app = Flask(__name__)
+
+# Setup Log to file function
+logfile = 'logs/' + time.strftime("%B-%d-%Y-%I-%M-%S%p") + '.log'
+logger = logging.getLogger('myapp')
+hdlr = logging.FileHandler(logfile)
+formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
+hdlr.setFormatter(formatter)
+logger.addHandler(hdlr) 
+logger.setLevel(logging.INFO)
 
 # Setup GPIO
 GPIO.setmode(GPIO.BCM)
@@ -60,19 +79,28 @@ for model in JukeBox_conf.Wallbox_models:
 
 # Only proceed if a valid configuration file is found
 if num_indexes == 0:
-    print("Error reading configuration file!")
-    print("Please check the configuration file.")
+    message = "Error reading configuration file!"
+    print(message)
+    logger.info(message)
     sys.exit()
 else:
-    print("Configuration: " + JukeBox_conf.Wallbox_models[model]['model'])
+    message = "Configuration: " + JukeBox_conf.Wallbox_models[model]['model']
+    print(message)
+    logger.info(message)
 
 # Create a dictionary called pins to store the pin number, name, and pin state:
-# Note: We don't actually need GPIO, these are present from the original example by Matt Richardson and have been left here just in case we need to add some GPIO control...
+# Note: We don't actually need GPIO, these are present from the original Flask example by Matt Richardson and have been left here just in case we need to add some GPIO control...
 pins = {
    23 : {'name' : 'GPIO 23', 'state' : GPIO.LOW},
    24 : {'name' : 'GPIO 24', 'state' : GPIO.LOW}
    }
 
+# Set each pin as an output and make it low:
+for pin in pins:
+   GPIO.setup(pin, GPIO.OUT)
+   GPIO.output(pin, GPIO.LOW)
+
+# Create a dictionary of tracks based on what media files are found...
 tracks = {}
 for index in range(num_indexes):
     index_filename = '000' + str(index+1)
@@ -95,26 +123,25 @@ for index in range(num_indexes):
         tracks[index+1]['artist'] = 'Unknown'
         tracks[index+1]['state'] = 'NA'
 
-# Set each pin as an output and make it low:
-for pin in pins:
-   GPIO.setup(pin, GPIO.OUT)
-   GPIO.output(pin, GPIO.LOW)
-
 @app.route("/")
 def main():
    global playlist, playlist_write_pointer, playlist_read_pointer
+
    # For each pin, read the pin state and store it in the pins dictionary:
    for pin in pins:
       pins[pin]['state'] = GPIO.input(pin)
+
    # Put the pin dictionary into the template data dictionary:
    templateData = {
       'version' : version,
+      'logfile' : logfile,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
       'tracks' : tracks,
 	  'pins' : pins
       }
+
    # Pass the template data into the template main.html and return it to the user
    return render_template('main.html', **templateData)
 
@@ -132,17 +159,19 @@ def action(changePin, action):
       GPIO.output(changePin, GPIO.HIGH)
       # Save the status message to be passed into the template:
       message = "Turned " + deviceName + " on."
+      logger.info(message)
    if action == "off":
       GPIO.output(changePin, GPIO.LOW)
       message = "Turned " + deviceName + " off."
+      logger.info(message)
 
    # For each pin, read the pin state and store it in the pins dictionary:
    for pin in pins:
       pins[pin]['state'] = GPIO.input(pin)
 
-   # Along with the pin dictionary, put the message into the template data dictionary:
    templateData = {
       'version' : version,
+      'logfile' : logfile,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -169,6 +198,7 @@ def finished():
       # Play the next track...
       message = "Playing " + 'sel' + Track + '.mp3'
       print(message)
+      logger.info(message)
       playing = True
 
       mp3_file = 'sel' + Track + '.mp3'
@@ -177,10 +207,11 @@ def finished():
       playing = False
       message = "End of Playlist."
       print(message)
+      logger.info(message)
 
-   # Along with the pin dictionary, put the message into the template data dictionary:
    templateData = {
       'version' : version,
+      'logfile' : logfile,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -219,6 +250,7 @@ def selection(changeTrack, action):
             # Play the next track...
             message = "Playing " + 'sel' + Track + '.mp3'
             print(message)
+            logger.info(message)
             playing = True
             mp3_file = 'sel' + Track + '.mp3'
             subprocess.Popen(['python', 'mp3_player.py', mp3_file])
@@ -226,10 +258,11 @@ def selection(changeTrack, action):
             playing = False
             message = "End of Playlist."
             print(message)
+            logger.info(message)
       
-   # Along with the pin dictionary, put the message into the template data dictionary:
    templateData = {
       'version' : version,
+      'logfile' : logfile,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -243,17 +276,26 @@ def selection(changeTrack, action):
 @app.route("/random/<action>")
 def random(action):
    # Find a random selection that's available
+   attempt = 1
    changeTrack = randint(1,200)
-   print("Random selection: ", changeTrack)
-   while tracks[changeTrack]['state'] != 'ready':
+   while tracks[changeTrack]['state'] != 'ready' and attempt <= 50:
+      attempt = attempt + 1
       changeTrack = randint(1,200)
-      print("Random selection: ", changeTrack)
 
-   # Pass the random selection together with the action to the selection function
-   selection(changeTrack, action)
-   
+   if tracks[changeTrack]['state'] == 'ready':
+      message = "Random selection: " + str(changeTrack)
+      print(message)
+      logger.info(message)
+      # Pass the random selection together with the action to the selection function
+      selection(changeTrack, action)   
+   else:
+      message = "Random selection failed after 50 attempts - tracks not ready"
+      print(message)
+      logger.info(message)
+
    templateData = {
       'version' : version,
+      'logfile' : logfile,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -269,22 +311,31 @@ def system(action):
    # If the action part of the URL is "on," execute the code indented below:
    if action == "shutdown":
       # Shutdown the player...
-      print("Shutting down...")
+      message = "Shutting down..."
+      print(message)
+      logger.info(message)
       os.system("sudo shutdown") 
    elif action == "exit":
       # Exit the player to the command prompt...
-      print("Closing player...")
+      message = "Closing player..."
+      print(message)
+      logger.info(message)
       sys.exit()
    elif action == "reboot":
       # Exit the player to the command prompt...
-      print("Rebooting player...")
+      message = "Rebooting player..."
+      print(message)
+      logger.info(message)
       os.system("sudo reboot") 
    elif action == "ping":
       # Ping the player to check it's alive...
-      print("Received a ping!")
+      message = "Received a Ping!"
+      print(message)
+      logger.info(message)
 
    templateData = {
       'version' : version,
+      'logfile' : logfile,
       'playlist' : playlist,
       'playing_now' : playlist_read_pointer,
       'playing_queued' : playlist_write_pointer - playlist_read_pointer,
@@ -293,6 +344,8 @@ def system(action):
       }
 
    return render_template('main.html', **templateData)
+
+logger.info('Starting RasPi-JukeBox...')
 
 if __name__ == "__main__":
    app.run(host='0.0.0.0', port=80, debug=True)
