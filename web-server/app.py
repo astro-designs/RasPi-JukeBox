@@ -10,7 +10,7 @@ To do...
     Test
 
 '''
-version = "1.0.36"
+version = "1.0.37"
 
 import os
 import sys
@@ -232,10 +232,20 @@ def selection(changeTrack, action):
    Track = '000' + str(changeTrack)
    Track = Track[-3:]
    if action == "play":
-      message = "Playing " + Track
-      playing = True
-      mp3_file = 'sel' + Track + '.mp3'
-      subprocess.Popen(['python', 'mp3_player.py', mp3_file])
+      message = "Playing " + Track + " next..."
+      print(message)
+      logger.info(message)
+
+      # Push track into playlist...
+      if playing == False:
+         playlist[0] = int(changeTrack)
+         playlist_queued = playlist_queued + 1
+         playing = True
+         mp3_file = 'sel' + Track + '.mp3'
+         subprocess.Popen(['python', 'mp3_player.py', mp3_file])
+      else:
+         playlist[1] = int(changeTrack)
+         
    if action == "add":
       message = "Adding " + Track + " to Playlist."
       # Check the playlist is big enough to support another entry, if not, increase the size of the play list to cope...
