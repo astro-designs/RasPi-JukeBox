@@ -3,16 +3,14 @@
 RasPi-JukeBox - the Raspberry Pi JukeBox created by Mark Cantrill @Astro-Designs
 
 To do...
-    Add logging function
     Make it run under Python 3
-    Prevent the playlist from falling over after 50 selections
     Flask - Turn off debugging
     Flask - Use a production thingy...
     Cleanup
     Test
 
 '''
-version = "1.0.31"
+version = "1.0.35"
 
 import os
 import sys
@@ -49,9 +47,8 @@ playlist = [0,0,0,0,0,0,0,0,0,0]
 while len(playlist) < JukeBox_conf.playlist_Length:
     playlist.append(0)
     
-# Reset playlist read / write pointers
-playlist_write_pointer = 0
-playlist_read_pointer = 0
+# Reset playlist queue
+playlist_queued = 0
 
 # Variable to track if anything is currently playing
 playing = False
@@ -125,7 +122,7 @@ for index in range(num_indexes):
 
 @app.route("/")
 def main():
-   global playlist, playlist_write_pointer, playlist_read_pointer
+   global playlist, playlist_queued
 
    # For each pin, read the pin state and store it in the pins dictionary:
    for pin in pins:
@@ -136,8 +133,8 @@ def main():
       'version' : version,
       'logfile' : logfile,
       'playlist' : playlist,
-      'playing_now' : playlist_read_pointer,
-      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'playing_now' : 0,
+      'playing_queued' : playlist_queued,
       'tracks' : tracks,
 	  'pins' : pins
       }
@@ -148,7 +145,7 @@ def main():
 # The function below is executed when someone requests a URL with the pin number and action in it:
 @app.route("/<changePin>/<action>")
 def action(changePin, action):
-   global playlist, playlist_write_pointer, playlist_read_pointer
+   global playlist, playlist_queued
    # Convert the pin from the URL into an integer:
    changePin = int(changePin)
    # Get the device name for the pin being changed:
@@ -173,8 +170,8 @@ def action(changePin, action):
       'version' : version,
       'logfile' : logfile,
       'playlist' : playlist,
-      'playing_now' : playlist_read_pointer,
-      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'playing_now' : 0,
+      'playing_queued' : playlist_queued,
       'tracks' : tracks,
 	  'pins' : pins
       }
@@ -184,15 +181,20 @@ def action(changePin, action):
 # The function below is executed when the track being played ends
 @app.route("/finished")
 def finished():
-   global playlist, playlist_write_pointer, playlist_read_pointer, playing
+   global playlist, playlist_queued, playing
    
-   # increment read pointer
-   playlist_read_pointer = playlist_read_pointer + 1
+   # Decrement queue
+   playlist_queued = min(playlist_queued - 1,0)
 
-   if playlist_read_pointer < playlist_write_pointer: # playlist has at least one entry ready to play
+   # rotate playlist
+   for i in range(len(playlist)-1):
+      playlist[i] = playlist[i+1]
+   playlist[len(playlist)-1] = 0
+   
+   if playlist_queued > 0: # playlist has at least one entry ready to play
 
       # Identify filename of playlist item
-      Track = '000' + str(playlist[playlist_read_pointer])
+      Track = '000' + str(playlist[0])
       Track = Track[-3:]
       
       # Play the next track...
@@ -213,10 +215,10 @@ def finished():
       'version' : version,
       'logfile' : logfile,
       'playlist' : playlist,
-      'playing_now' : playlist_read_pointer,
-      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'playing_now' : 0,
+      'playing_queued' : playlist_queued,
       'tracks' : tracks,
-      'pins' : pins
+	  'pins' : pins
       }
 
    return render_template('main.html', **templateData)
@@ -224,7 +226,7 @@ def finished():
 # The function below is executed when someone requests a URL with a track reference to add to the play list or play immediately
 @app.route("/sel<changeTrack>/<action>")
 def selection(changeTrack, action):
-   global playlist, playlist_write_pointer, playlist_read_pointer, playing
+   global playlist, playlist_queued, playing
    
    # Append zeros to changeTrack
    Track = '000' + str(changeTrack)
@@ -236,38 +238,37 @@ def selection(changeTrack, action):
       subprocess.Popen(['python', 'mp3_player.py', mp3_file])
    if action == "add":
       message = "Adding " + Track + " to Playlist."
-      playlist[playlist_write_pointer] = int(changeTrack)
-      playlist_write_pointer = playlist_write_pointer + 1
+      # Check the playlist is big enough to support another entry, if not, increase the size of the play list to cope...
+      if len(playlist) <= playlist_queued:
+          playlist.append(0)
+      
+      # Add track to playlist...
+      playlist[playlist_queued] = int(changeTrack)
+      playlist_queued = playlist_queued + 1
       
       # Start processing the playlist if nothing is playing
       if playing == False:
-         if playlist_read_pointer < playlist_write_pointer: # playlist has at least one entry ready to play
 
-            # Identify filename of playlist item
-            Track = '000' + str(playlist[playlist_read_pointer])
-            Track = Track[-3:]
+         # Identify filename of playlist item
+         Track = '000' + str(playlist[0])
+         Track = Track[-3:]
 
-            # Play the next track...
-            message = "Playing " + 'sel' + Track + '.mp3'
-            print(message)
-            logger.info(message)
-            playing = True
-            mp3_file = 'sel' + Track + '.mp3'
-            subprocess.Popen(['python', 'mp3_player.py', mp3_file])
-         else: # playlist is empty
-            playing = False
-            message = "End of Playlist."
-            print(message)
-            logger.info(message)
+         # Play the next track...
+         message = "Playing " + 'sel' + Track + '.mp3'
+         print(message)
+         logger.info(message)
+         playing = True
+         mp3_file = 'sel' + Track + '.mp3'
+         subprocess.Popen(['python', 'mp3_player.py', mp3_file])      
       
    templateData = {
       'version' : version,
       'logfile' : logfile,
       'playlist' : playlist,
-      'playing_now' : playlist_read_pointer,
-      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'playing_now' : 0,
+      'playing_queued' : playlist_queued,
       'tracks' : tracks,
-      'pins' : pins
+	  'pins' : pins
       }
 
    return render_template('main.html', **templateData)
@@ -297,10 +298,10 @@ def random(action):
       'version' : version,
       'logfile' : logfile,
       'playlist' : playlist,
-      'playing_now' : playlist_read_pointer,
-      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'playing_now' : 0,
+      'playing_queued' : playlist_queued,
       'tracks' : tracks,
-      'pins' : pins
+	  'pins' : pins
       }
 
    return render_template('main.html', **templateData)
@@ -337,8 +338,8 @@ def system(action):
       'version' : version,
       'logfile' : logfile,
       'playlist' : playlist,
-      'playing_now' : playlist_read_pointer,
-      'playing_queued' : playlist_write_pointer - playlist_read_pointer,
+      'playing_now' : 0,
+      'playing_queued' : playlist_queued,
       'tracks' : tracks,
 	  'pins' : pins
       }
