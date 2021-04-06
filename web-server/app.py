@@ -10,7 +10,7 @@ To do...
     Test
 
 '''
-version = "1.0.35"
+version = "1.0.36"
 
 import os
 import sys
@@ -184,7 +184,7 @@ def finished():
    global playlist, playlist_queued, playing
    
    # Decrement queue
-   playlist_queued = min(playlist_queued - 1,0)
+   playlist_queued = max(playlist_queued - 1,0)
 
    # rotate playlist
    for i in range(len(playlist)-1):
