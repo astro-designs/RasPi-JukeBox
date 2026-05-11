@@ -10,7 +10,7 @@ To do...
     Test
 
 '''
-version = "1.0.37"
+version = "1.0.42"
 
 import os
 import sys
@@ -35,6 +35,16 @@ logger.setLevel(logging.INFO)
 
 # Setup GPIO
 GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+# Set variables for the GPIO pins
+pinPlayerRunningLED = 20 # Player running status
+pinTrackRequestLED = 23 # Track request received
+
+GPIO.setup(pinPlayerRunningLED, GPIO.OUT)
+GPIO.output(pinPlayerRunningLED, True)
+GPIO.setup(pinTrackRequestLED, GPIO.OUT)
+GPIO.output(pinTrackRequestLED, False)
 
 # Seed the random number generator
 seed()
@@ -102,20 +112,25 @@ tracks = {}
 for index in range(num_indexes):
     index_filename = '000' + str(index+1)
     index_filename = 'sel' + index_filename[-3:]
-    index_filename = index_filename + '.mp3'
+    #index_filename = index_filename + '.mp3'
 
     # Create a new entry
     tracks[index+1] = {}    
 
     # Check if file exists...
     PATH = JukeBox_conf.media_folder + index_filename
-    if os.path.isfile(PATH) and os.access(PATH, os.R_OK):
-        tracks[index+1]['filename'] = index_filename
+    if os.path.isfile(PATH + '.mp3') and os.access(PATH + '.mp3', os.R_OK):
+        tracks[index+1]['filename'] = index_filename + '.mp3'
+        tracks[index+1]['title'] = 'Unknown'
+        tracks[index+1]['artist'] = 'Unknown'
+        tracks[index+1]['state'] = 'ready'
+    elif os.path.isfile(PATH + '.wma') and os.access(PATH + '.wma', os.R_OK):
+        tracks[index+1]['filename'] = index_filename + '.wma'
         tracks[index+1]['title'] = 'Unknown'
         tracks[index+1]['artist'] = 'Unknown'
         tracks[index+1]['state'] = 'ready'
     else:
-        tracks[index+1]['filename'] = index_filename
+        tracks[index+1]['filename'] = index_filename + '.xxx'
         tracks[index+1]['title'] = 'Unknown'
         tracks[index+1]['artist'] = 'Unknown'
         tracks[index+1]['state'] = 'NA'
@@ -196,15 +211,15 @@ def finished():
       # Identify filename of playlist item
       Track = '000' + str(playlist[0])
       Track = Track[-3:]
+      filename = tracks[int(playlist[0])]['filename']
       
       # Play the next track...
-      message = "Playing " + 'sel' + Track + '.mp3'
+      message = "Playing " + filename
       print(message)
       logger.info(message)
       playing = True
 
-      mp3_file = 'sel' + Track + '.mp3'
-      subprocess.Popen(['python', 'mp3_player.py', mp3_file])
+      subprocess.Popen(['python', 'mp3_player.py', filename])      
    else: # playlist is empty
       playing = False
       message = "End of Playlist."
@@ -228,6 +243,9 @@ def finished():
 def selection(changeTrack, action):
    global playlist, playlist_queued, playing
    
+   # Set the "Track Requested" LED to On...
+   GPIO.output(pinTrackRequestLED, True)
+
    # Append zeros to changeTrack
    Track = '000' + str(changeTrack)
    Track = Track[-3:]
@@ -241,8 +259,8 @@ def selection(changeTrack, action):
          playlist[0] = int(changeTrack)
          playlist_queued = playlist_queued + 1
          playing = True
-         mp3_file = 'sel' + Track + '.mp3'
-         subprocess.Popen(['python', 'mp3_player.py', mp3_file])
+         filename = tracks[int(playlist[0])]['filename']
+         subprocess.Popen(['python', 'mp3_player.py', filename])      
       else:
          playlist[1] = int(changeTrack)
          
@@ -262,14 +280,14 @@ def selection(changeTrack, action):
          # Identify filename of playlist item
          Track = '000' + str(playlist[0])
          Track = Track[-3:]
+         filename = tracks[int(playlist[0])]['filename']
 
          # Play the next track...
-         message = "Playing " + 'sel' + Track + '.mp3'
+         message = "Playing " + filename
          print(message)
          logger.info(message)
          playing = True
-         mp3_file = 'sel' + Track + '.mp3'
-         subprocess.Popen(['python', 'mp3_player.py', mp3_file])      
+         subprocess.Popen(['python', 'mp3_player.py', filename])      
       
    templateData = {
       'version' : version,
@@ -280,6 +298,9 @@ def selection(changeTrack, action):
       'tracks' : tracks,
 	  'pins' : pins
       }
+
+   # Reset the "Track Requested" LED to off...
+   GPIO.output(pinTrackRequestLED, False)
 
    return render_template('main.html', **templateData)
 
@@ -324,20 +345,23 @@ def system(action):
       # Shutdown the player...
       message = "Shutting down..."
       print(message)
+      GPIO.output(pinPlayerRunningLED, False)
       logger.info(message)
-      os.system("sudo shutdown") 
+      os.system("sudo shutdown now") 
    elif action == "exit":
       # Exit the player to the command prompt...
       message = "Closing player..."
       print(message)
+      GPIO.output(pinPlayerRunningLED, False)
       logger.info(message)
       sys.exit()
    elif action == "reboot":
       # Exit the player to the command prompt...
       message = "Rebooting player..."
       print(message)
+      GPIO.output(pinPlayerRunningLED, False)
       logger.info(message)
-      os.system("sudo reboot") 
+      os.system("sudo reboot now") 
    elif action == "ping":
       # Ping the player to check it's alive...
       message = "Received a Ping!"
