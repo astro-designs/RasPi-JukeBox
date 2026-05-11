@@ -29,7 +29,7 @@ for i in {1..30}; do
     echo "$(date) - Network connection failed to appear" >> /home/pi/jukebox.log
 done
 
-cd /home/pi/RasPi-Jukebox
+cd /home/pi/RasPi-JukeBox
 
 # Check WiFi connection...
 iwgetid >> /home/pi/jukebox.log 2>&1
