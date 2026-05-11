@@ -29,7 +29,7 @@ for i in {1..30}; do
     echo "$(date) - Network connection failed to appear" >> /home/pi/jukebox.log
 done
 
-cd /home/pi/web-server
+cd /home/pi/RasPi-Jukebox
 
 # Check WiFi connection...
 iwgetid >> /home/pi/jukebox.log 2>&1
@@ -56,5 +56,6 @@ echo 20 > /sys/class/gpio/unexport
 echo 23 > /sys/class/gpio/unexport
 
 # Run the Wallbox script
+cd web-server
 sudo python app.py
 
